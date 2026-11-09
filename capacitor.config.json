@@ -1,0 +1,10 @@
+{
+  "appId": "com.system.orta",
+  "appName": "Bee-Queen",
+  "webDir": "dist",
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}
