@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ShoppingBag, Search, Plus, Trash2, ChevronDown,
-  FileText, MessageCircle, Send, Check, User, X, Camera, Barcode, AlertTriangle
+  FileText, MessageCircle, Send, Check, User, X, Camera, Barcode, AlertTriangle, Eye
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../core/db';
@@ -270,6 +270,22 @@ export default function NewOrderScreen() {
   };
   const [step3Visible, setStep3Visible] = useState(false);
   const [step4Visible, setStep4Visible] = useState(false);
+  const [showFactoryInfo, setShowFactoryInfo] = useState(false);
+
+  useEffect(() => {
+    if (!showFactoryInfo) return;
+    const handleRelease = () => setShowFactoryInfo(false);
+    window.addEventListener('mouseup', handleRelease);
+    window.addEventListener('touchend', handleRelease);
+    window.addEventListener('touchcancel', handleRelease);
+    window.addEventListener('blur', handleRelease);
+    return () => {
+      window.removeEventListener('mouseup', handleRelease);
+      window.removeEventListener('touchend', handleRelease);
+      window.removeEventListener('touchcancel', handleRelease);
+      window.removeEventListener('blur', handleRelease);
+    };
+  }, [showFactoryInfo]);
 
   // Colors & size series
   const [allColors, setAllColors] = useState([]);
@@ -310,9 +326,13 @@ export default function NewOrderScreen() {
     
     const loadedItems = order.items || [];
     
-    // Lazy load any missing images for loaded items
+    // Lazy load any missing images and factoryPrice for loaded items
     for (let i = 0; i < loadedItems.length; i++) {
         const item = loadedItems[i];
+        if (item.factoryPrice === undefined && item.catalogId) {
+            const cat = await db.catalog.get(item.catalogId);
+            if (cat) item.factoryPrice = parseFloat(cat.factoryPrice) || 0;
+        }
         if (item.firstAsset && item.firstAsset.fileId && !item.firstAsset.blob) {
             // We need colorId to save back to DB, we can query it using catalogId and colorId
             db.modelColors.where({ catalogId: item.catalogId }).toArray().then(mcs => {
@@ -646,6 +666,7 @@ export default function NewOrderScreen() {
       sizes,
       totalQty,
       unitPrice,
+      factoryPrice: parseFloat(modelResult.factoryPrice) || 0,
       totalPrice: totalQty * unitPrice,
       seriesType,
     };
@@ -670,6 +691,8 @@ export default function NewOrderScreen() {
   const subtotal = items.reduce((s, i) => s + i.totalPrice, 0);
   const discountVal = parseFloat(discount) || 0;
   const total = subtotal - discountVal;
+  const totalFactoryCost = items.reduce((s, i) => s + (i.totalQty * (parseFloat(i.factoryPrice) || 0)), 0);
+  const totalNetProfit = total - totalFactoryCost;
   const depositVal = parseFloat(depositAmount) || 0;
   let paidVal = parseFloat(paidExact) || total;
   if (orderType === 'paid' && paidVal < total) paidVal = total;
@@ -1266,13 +1289,46 @@ export default function NewOrderScreen() {
               <div className="table-wrap">
                 <table>
                   <thead>
-                    <tr><th>Model</th><th>Color</th><th>Sizes</th><th>Type</th><th>Price</th><th>Total</th><th></th></tr>
+                    <tr><th>Model</th><th style={{ width: 28, padding: 0 }}></th><th>Color</th><th>Sizes</th><th>Type</th><th>Price</th><th>Total</th><th></th></tr>
                   </thead>
                   <tbody>
-                    {items.map(item => (
+                    {items.map(item => {
+                      const fPrice = parseFloat(item.factoryPrice) || 0;
+                      const unitProfit = item.unitPrice - fPrice;
+                      const fTotal = item.totalQty * fPrice;
+                      const itemProfit = item.totalPrice - fTotal;
+                      return (
                       <tr key={item.id}>
                         <td style={{ padding: '8px' }}>
                           <TableCellImage asset={item.firstAsset} code={item.catalogCode} />
+                        </td>
+                        <td style={{ padding: '4px 2px', textAlign: 'center', verticalAlign: 'middle', width: 28 }}>
+                          <button
+                            type="button"
+                            onMouseDown={e => { e.preventDefault(); setShowFactoryInfo(true); }}
+                            onTouchStart={e => { e.preventDefault(); setShowFactoryInfo(true); }}
+                            onMouseUp={() => setShowFactoryInfo(false)}
+                            onMouseLeave={() => setShowFactoryInfo(false)}
+                            onTouchEnd={() => setShowFactoryInfo(false)}
+                            onTouchCancel={() => setShowFactoryInfo(false)}
+                            onContextMenu={e => e.preventDefault()}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              padding: 6,
+                              cursor: 'pointer',
+                              color: showFactoryInfo ? 'var(--gold)' : 'var(--text-muted)',
+                              opacity: showFactoryInfo ? 0.85 : 0.22,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              userSelect: 'none',
+                              WebkitUserSelect: 'none',
+                              transition: 'opacity 0.15s ease',
+                            }}
+                          >
+                            <Eye size={14} />
+                          </button>
                         </td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1293,18 +1349,43 @@ export default function NewOrderScreen() {
                           </span>
                         </td>
                         <td>
-                          <span className="text-gold text-bold" style={{ fontSize: '1.1rem' }}>{item.totalQty}</span>
-                          <span style={{ margin: '0 8px', color: 'var(--text-muted)' }}>×</span>
-                          <span className="text-green text-bold" style={{ fontSize: '1.1rem' }}>${item.unitPrice.toFixed(2)}</span>
+                          <div>
+                            <span className="text-gold text-bold" style={{ fontSize: '1.1rem' }}>{item.totalQty}</span>
+                            <span style={{ margin: '0 8px', color: 'var(--text-muted)' }}>×</span>
+                            <span className="text-green text-bold" style={{ fontSize: '1.1rem' }}>${item.unitPrice.toFixed(2)}</span>
+                          </div>
+                          {showFactoryInfo && (
+                            <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2, fontSize: '0.82rem', lineHeight: 1.2 }}>
+                              <div style={{ color: 'var(--text-sec)' }}>
+                                Factory: <strong style={{ color: 'var(--text)' }}>${fPrice.toFixed(2)}</strong>
+                              </div>
+                              <div style={{ color: unitProfit >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                                Profit: <strong>${unitProfit.toFixed(2)}</strong>
+                              </div>
+                            </div>
+                          )}
                         </td>
-                        <td className="text-gold text-bold" style={{ fontSize: '1.1rem' }}>${item.totalPrice.toFixed(2)}</td>
+                        <td>
+                          <div className="text-gold text-bold" style={{ fontSize: '1.1rem' }}>${item.totalPrice.toFixed(2)}</div>
+                          {showFactoryInfo && (
+                            <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2, fontSize: '0.82rem', lineHeight: 1.2 }}>
+                              <div style={{ color: 'var(--text-sec)' }}>
+                                Factory: <strong style={{ color: 'var(--text)' }}>${fTotal.toFixed(2)}</strong>
+                              </div>
+                              <div style={{ color: itemProfit >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                                Profit: <strong>${itemProfit.toFixed(2)}</strong>
+                              </div>
+                            </div>
+                          )}
+                        </td>
                         <td>
                           <button className="btn btn-danger btn-sm btn-icon" onClick={() => removeItem(item.id)}>
                             <Trash2 size={13} />
                           </button>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1326,9 +1407,55 @@ export default function NewOrderScreen() {
                             'var(--glass-gold)',
                 transition: 'background 0.3s ease'
               }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--gold)', marginBottom: 16, letterSpacing: 1 }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--gold)', marginBottom: 12, letterSpacing: 1 }}>
                   INVOICE SUMMARY
                 </div>
+
+                {/* Live Total Invoice Box above PAID / DEPOSIT / NO PAID buttons */}
+                <div className="flex-between" style={{
+                  marginBottom: 14,
+                  padding: '12px 14px',
+                  borderRadius: 10,
+                  background: 'rgba(0, 0, 0, 0.35)',
+                  border: `1px solid ${finalOrderType === 'paid' ? 'var(--green)' : finalOrderType === 'preforma' ? 'var(--text-muted)' : 'var(--border-gold)'}`
+                }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.95rem', letterSpacing: 0.5, color: finalOrderType === 'paid' ? 'var(--green)' : finalOrderType === 'preforma' ? 'var(--text-muted)' : 'var(--gold)' }}>
+                    TOTAL
+                  </span>
+                  <span style={{ fontSize: '1.6rem', fontWeight: 800, color: finalOrderType === 'paid' ? 'var(--green)' : finalOrderType === 'preforma' ? 'var(--text-muted)' : 'var(--gold)' }}>
+                    ${total.toFixed(2)}
+                  </span>
+                </div>
+
+                {/* Factory Total & Net Profit (shown above NO PAID when holding Eye button) */}
+                {showFactoryInfo && (
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    marginBottom: 10,
+                  }}>
+                    <div style={{
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      background: 'rgba(0, 0, 0, 0.55)',
+                      border: '1px solid rgba(212, 175, 55, 0.35)',
+                      fontSize: '0.82rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 4,
+                      minWidth: '45%',
+                    }}>
+                      <div className="flex-between" style={{ gap: 12 }}>
+                        <span style={{ color: 'var(--text-sec)' }}>Factory Total:</span>
+                        <strong style={{ color: 'var(--text)' }}>${totalFactoryCost.toFixed(2)}</strong>
+                      </div>
+                      <div className="flex-between" style={{ gap: 12 }}>
+                        <span style={{ color: 'var(--text-sec)' }}>Profit:</span>
+                        <strong style={{ color: totalNetProfit >= 0 ? 'var(--green)' : 'var(--red)' }}>${totalNetProfit.toFixed(2)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Step 1: Order Type */}
                 {!isWatcherDevice() && (
