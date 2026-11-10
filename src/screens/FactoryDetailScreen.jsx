@@ -37,6 +37,7 @@ export default function FactoryDetailScreen() {
   const [allModelColors, setAllModelColors] = useState([]);
   const [allColors, setAllColors] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false);
 
   useEffect(() => { load(); }, [id]);
 
@@ -331,8 +332,9 @@ export default function FactoryDetailScreen() {
       });
       Logger.info('factories', 'saveInvoice', `Factory ${type} saved — queued to Telegram`, { id: inv.id, amount });
       toast.success(`${type.charAt(0).toUpperCase()+type.slice(1)} saved — $${amount.toFixed(2)}`);
+      setShowSaveConfirm(false);
       setModal(null); setForm({ number:'', amount:'', receiver:'', note:'' });
-      setInvoiceItems([{ catalogCode:'', colorName:'', qty:1, factoryPrice:0, catalogId: null, availableColors: [] }]);
+      setInvoiceItems([{ catalogCode:'', colorName:'', qty:1, factoryPrice:0, catalogId: null, availableColors: [], sizes: [], sizeQtys: {} }]);
       setInvoicePhoto(null);
       setPhotoPreview(null);
       load();
@@ -364,7 +366,8 @@ export default function FactoryDetailScreen() {
   const selectModelForInvoice = (idx, model) => {
     const colorsForModel = allModelColors.filter(mc => mc.catalogId === model.id).map(mc => {
       const cDef = allColors.find(c => c.id === mc.colorId) || {};
-      return { ...mc, name: cDef.name || mc.colorCode, hex: cDef.hex };
+      const totalStock = (mc.stock || []).reduce((s, x) => s + (parseInt(x.qty) || 0), 0);
+      return { ...mc, name: cDef.name || mc.colorCode, hex: cDef.hex, totalStock };
     });
 
     // Load the size series for this model
@@ -662,14 +665,14 @@ export default function FactoryDetailScreen() {
             <div className="form-label" style={{marginBottom:8}}>Items</div>
             <div className="table-wrap" style={{marginBottom:12, overflow: 'visible'}}>
               <table>
-                <thead><tr><th>Model Code</th><th>Color</th><th>Qty</th><th>Factory Price</th><th>Total</th><th></th></tr></thead>
+                <thead><tr><th style={{ minWidth: 180 }}>Model Code</th><th>Color</th><th>Qty</th><th>Factory Price</th><th>Total</th><th></th></tr></thead>
                 <tbody>
                   {invoiceItems.map((item,i) => {
                     const selColor = item.availableColors?.find(c => c.name === item.colorName);
                     return (
                     <tr key={i} style={{ background: selColor?.hex ? `linear-gradient(to right, ${selColor.hex}33 0%, transparent 70%)` : undefined }}>
-                      <td style={{ position: 'relative' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                      <td style={{ position: 'relative', minWidth: 180 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: '100%' }}>
                           <button className="btn btn-secondary btn-icon" style={{ width: '100%', padding: 6, display: 'flex', justifyContent: 'center', alignItems: 'center' }} onClick={() => { setShowScanner(true); setScannerTargetRow(i); }} title="Scan Barcode">
                             <Barcode size={16} />
                           </button>
@@ -681,7 +684,7 @@ export default function FactoryDetailScreen() {
                           <div style={{ width: '100%', position: 'relative' }}>
                             <input 
                               value={item.catalogCode} 
-                              style={{padding:'6px 8px',fontSize:'0.82rem', width:'100%'}} 
+                              style={{padding:'6px 8px',fontSize:'0.82rem', width:'100%', minWidth: 160}} 
                               placeholder="Code" 
                               onChange={e=>{
                                 const n=[...invoiceItems];
@@ -721,7 +724,7 @@ export default function FactoryDetailScreen() {
                               <button
                                 key={cIdx}
                                 className="btn btn-secondary btn-sm"
-                                style={{ padding: '4px 10px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 8, width: 100, justifyContent: 'flex-start', overflow: 'hidden', backgroundImage: c.hex ? (item.colorName === c.name ? `linear-gradient(to right, ${c.hex}AA 0%, transparent 80%)` : `linear-gradient(to right, ${c.hex}44 0%, transparent 80%)`) : 'none', border: item.colorName === c.name ? '1px solid var(--gold)' : '1px solid var(--border)', boxShadow: item.colorName === c.name ? '0 0 12px rgba(212,175,55,0.4)' : 'none', transition: 'all 0.2s', color: item.colorName === c.name ? 'var(--gold)' : 'var(--text)' }}
+                                style={{ padding: '4px 10px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6, minWidth: 120, justifyContent: 'flex-start', overflow: 'hidden', backgroundImage: c.hex ? (item.colorName === c.name ? `linear-gradient(to right, ${c.hex}AA 0%, transparent 80%)` : `linear-gradient(to right, ${c.hex}44 0%, transparent 80%)`) : 'none', border: item.colorName === c.name ? '1px solid var(--gold)' : '1px solid var(--border)', boxShadow: item.colorName === c.name ? '0 0 12px rgba(212,175,55,0.4)' : 'none', transition: 'all 0.2s', color: item.colorName === c.name ? 'var(--gold)' : 'var(--text)' }}
                                 onClick={(e) => {
                                   e.preventDefault();
                                   const n=[...invoiceItems];
@@ -729,14 +732,15 @@ export default function FactoryDetailScreen() {
                                   setInvoiceItems(n);
                                 }}
                               >
-                                <div style={{ width: 10, height: 10, borderRadius: '50%', background: c.hex || '#ccc' }} />
-                                {c.name}
+                                <div style={{ width: 10, height: 10, borderRadius: '50%', background: c.hex || '#ccc', flexShrink: 0 }} />
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
+                                <span className={(c.totalStock || 0) > 0 ? 'text-green' : 'text-red'} style={{ fontSize: '0.72rem', marginLeft: 'auto', fontWeight: 700, flexShrink: 0 }}>
+                                  ({c.totalStock || 0})
+                                </span>
                               </button>
                             ))}
                           </div>
-                        ) : (
-                          <input value={item.colorName} style={{padding:'6px 8px',fontSize:'0.82rem', width:'100%'}} placeholder="Color" onChange={e=>{const n=[...invoiceItems];n[i]={...n[i],colorName:e.target.value};setInvoiceItems(n);}}/>
-                        )}
+                        ) : null}
                       </td>
                       <td>
                         {(modal === 'return' || modal === 'invoice') && item.sizes?.length > 0 ? (
@@ -782,9 +786,7 @@ export default function FactoryDetailScreen() {
                               Total: {Object.values(item.sizeQtys || {}).reduce((a, b) => a + (parseInt(b) || 0), 0)} pcs
                             </div>
                           </div>
-                        ) : (
-                          <input type="number" value={item.qty} style={{padding:'6px 8px',fontSize:'0.82rem',width:70}} onChange={e=>{const n=[...invoiceItems];n[i]={...n[i],qty:parseInt(e.target.value)||0};setInvoiceItems(n);}}/>
-                        )}
+                        ) : null}
                       </td>
                       <td><input type="number" value={item.factoryPrice} style={{padding:'6px 8px',fontSize:'0.82rem',width:90}} onChange={e=>{const n=[...invoiceItems];n[i]={...n[i],factoryPrice:parseFloat(e.target.value)||0};setInvoiceItems(n);}}/></td>
                       <td className="text-gold text-bold">${(() => { const sizeSum = Object.values(item.sizeQtys||{}).reduce((a,b)=>a+(parseInt(b)||0),0); return ((sizeSum>0?sizeSum:item.qty)*item.factoryPrice).toFixed(2); })()}</td>
@@ -794,7 +796,7 @@ export default function FactoryDetailScreen() {
                 </tbody>
               </table>
             </div>
-            <button className="btn btn-secondary btn-sm" onClick={()=>setInvoiceItems(p=>[...p,{catalogCode:'',colorName:'',qty:1,factoryPrice:0, catalogId: null, availableColors: []}])}><Plus size={13}/> Add Model</button>
+            <button className="btn btn-secondary btn-sm" onClick={()=>setInvoiceItems(p=>[...p,{catalogCode:'',colorName:'',qty:1,factoryPrice:0, catalogId: null, availableColors: [], sizes: [], sizeQtys: {}}])}><Plus size={13}/> Add Model</button>
             
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 12 }}>
               <div style={{flex: 1}}></div>
@@ -806,8 +808,97 @@ export default function FactoryDetailScreen() {
               </div>
             </div>
             <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={()=>setModal(null)}>Cancel</button>
-              <button className="btn btn-primary" onClick={()=>saveInvoice(modal)} disabled={saving}>{saving?'Saving...':'Save'}</button>
+              <button className="btn btn-secondary" onClick={()=>{setShowSaveConfirm(false); setModal(null);}}>Cancel</button>
+              <button className="btn btn-primary" onClick={()=>{
+                const validItems = invoiceItems.filter(i => i.catalogCode);
+                if (validItems.length === 0) { toast.error('Add at least one item'); return; }
+                setShowSaveConfirm(true);
+              }} disabled={saving}>{saving?'Saving...':'Save'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Save Confirmation / Photo Comparison Modal */}
+      {showSaveConfirm && (modal === 'invoice' || modal === 'return') && (
+        <div className="modal-overlay" style={{ zIndex: 1200 }} onClick={() => setShowSaveConfirm(false)}>
+          <div className="modal-box modal-box-lg" style={{ maxWidth: 720, width: '95%' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <CheckCircle size={18} style={{ color: 'var(--gold)' }} />
+              Confirm {modal === 'invoice' ? 'Import Invoice' : 'Return Invoice'}
+            </div>
+
+            {photoPreview ? (
+              <div style={{
+                width: '100%',
+                maxHeight: '62vh',
+                borderRadius: 10,
+                overflow: ' auto',
+                border: '1px solid var(--border-gold)',
+                background: '#050505',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: 16,
+              }}>
+                <img
+                  src={photoPreview}
+                  alt="Invoice Full Preview"
+                  style={{ width: '100%', maxHeight: '60vh', objectFit: 'contain', display: 'block' }}
+                />
+              </div>
+            ) : (
+              <div style={{
+                padding: '28px 16px',
+                borderRadius: 10,
+                background: 'rgba(245, 158, 11, 0.1)',
+                border: '1px solid rgba(245, 158, 11, 0.4)',
+                textAlign: 'center',
+                marginBottom: 16,
+              }}>
+                <Camera size={32} style={{ color: 'var(--orange)', marginBottom: 8 }} />
+                <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--orange)' }}>
+                  ما فمّاش تصويرة للفاتورة (No Invoice Photo)
+                </div>
+              </div>
+            )}
+
+            <div style={{
+              padding: '14px 18px',
+              borderRadius: 10,
+              background: 'rgba(212, 175, 55, 0.1)',
+              border: '1px solid var(--border-gold)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 18,
+            }}>
+              <span style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text)' }}>Total Invoice:</span>
+              <span style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--gold)' }}>
+                ${invoiceItems.reduce((s, i) => {
+                  const sizeSum = Object.values(i.sizeQtys || {}).reduce((a, b) => a + (parseInt(b) || 0), 0);
+                  return s + ((sizeSum > 0 ? sizeSum : i.qty) * i.factoryPrice);
+                }, 0).toFixed(2)}
+              </span>
+            </div>
+
+            <div className="modal-actions" style={{ display: 'flex', gap: 12 }}>
+              <button
+                className="btn btn-secondary"
+                style={{ flex: 1, padding: '12px', justifyContent: 'center', fontSize: '1rem', fontWeight: 600 }}
+                onClick={() => setShowSaveConfirm(false)}
+                disabled={saving}
+              >
+                Back
+              </button>
+              <button
+                className="btn btn-primary"
+                style={{ flex: 1, padding: '12px', justifyContent: 'center', fontSize: '1rem', fontWeight: 700 }}
+                onClick={() => saveInvoice(modal)}
+                disabled={saving}
+              >
+                {saving ? 'Saving...' : 'Save'}
+              </button>
             </div>
           </div>
         </div>
