@@ -77,7 +77,7 @@ export default function FactoryInvoiceDetailModal({ invoice, factory, onClose })
 
   return (
     <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1000 }}>
-      <div className="modal-box modal-box-lg" style={{ position: 'relative', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+      <div className="modal-box modal-box-lg" style={{ position: 'relative', overflowY: 'auto', overflowX: 'hidden', maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
         
         <div style={{
           position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 0,
@@ -175,13 +175,6 @@ export default function FactoryInvoiceDetailModal({ invoice, factory, onClose })
           </div>
         )}
 
-        {invoice.photoBlob && (
-          <div style={{ marginTop: 16 }}>
-            <div className="text-sec text-sm" style={{ marginBottom: 8 }}>Receipt Photo</div>
-            <img src={URL.createObjectURL(invoice.photoBlob)} alt="Receipt" style={{ maxWidth: '100%', borderRadius: 8, border: '1px solid var(--border)' }} />
-          </div>
-        )}
-
         {invoice.note && (
           <div style={{ marginTop: 16 }}>
             <div className="text-sec text-sm" style={{ marginBottom: 4 }}>Note</div>
@@ -189,12 +182,43 @@ export default function FactoryInvoiceDetailModal({ invoice, factory, onClose })
           </div>
         )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 16, alignItems: 'flex-end' }}>
-            <div className="text-muted" style={{ fontSize: '1.1rem' }}>Total Amount</div>
-            <div className={`text-bold ${invoice.type === 'return' || invoice.type === 'payment' ? 'text-red' : 'text-green'}`} style={{ fontSize: '1.6rem' }}>
-              {invoice.type === 'in' ? '+' : '-'}${(invoice.amount || 0).toFixed(2)}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginTop: 16,
+          padding: '12px 16px',
+          borderRadius: 10,
+          background: 'rgba(0,0,0,0.35)',
+          border: '1px solid var(--border-gold)',
+        }}>
+          <div className="text-muted" style={{ fontSize: '1.1rem', fontWeight: 600 }}>Total Amount</div>
+          <div className={`text-bold ${invoice.type === 'return' || invoice.type === 'payment' ? 'text-red' : 'text-green'}`} style={{ fontSize: '1.6rem' }}>
+            {invoice.type === 'in' ? '+' : '-'}${(invoice.amount || 0).toFixed(2)}
+          </div>
+        </div>
+
+        {invoice.photoBlob && (
+          <div style={{ marginTop: 16 }}>
+            <div className="text-sec text-sm" style={{ marginBottom: 8 }}>Receipt Photo</div>
+            <img src={URL.createObjectURL(invoice.photoBlob)} alt="Receipt" style={{ width: '100%', maxWidth: '100%', borderRadius: 8, border: '1px solid var(--border)', display: 'block' }} />
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginTop: 12,
+              padding: '12px 16px',
+              borderRadius: 10,
+              background: 'rgba(0,0,0,0.35)',
+              border: '1px solid var(--border-gold)',
+            }}>
+              <div className="text-muted" style={{ fontSize: '1.1rem', fontWeight: 600 }}>Total Amount</div>
+              <div className={`text-bold ${invoice.type === 'return' || invoice.type === 'payment' ? 'text-red' : 'text-green'}`} style={{ fontSize: '1.6rem' }}>
+                {invoice.type === 'in' ? '+' : '-'}${(invoice.amount || 0).toFixed(2)}
+              </div>
             </div>
           </div>
+        )}
         </div>
       </div>
     </div>
